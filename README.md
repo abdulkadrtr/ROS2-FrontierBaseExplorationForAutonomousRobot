@@ -33,6 +33,8 @@ package using the following command:
 
 `ros2 run autonomous_exploration control`
 
+This will start the robot's autonomous exploration.
+
 ## Requirements
 
 - ROS2 - Humble
