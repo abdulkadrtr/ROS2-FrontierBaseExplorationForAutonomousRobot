@@ -1,6 +1,8 @@
 # ROS2-FrontierBaseExplorationForAutonomousRobot
 Our autonomous ground vehicle uses Frontier Based exploration to navigate and map unknown environments. Equipped with sensors, it can avoid obstacles and make real-time decisions. It has potential applications in search and rescue, agriculture, and logistics, and represents an important step forward in autonomous ground vehicle development.
 
+This project utilizes the **Frontier-Based Exploration** algorithm for autonomous exploration. The project employs **DFS** for grouping boundary points, **A*** for finding the shortest path, **B-Spline** for smoothing path curvature, and **Pure Pursuit** for path following, along with other obstacle avoidance techniques. The combination of these techniques aims to provide a sophisticated, efficient, and reliable solution for autonomous ground vehicle exploration in a wide range of applications.
+
 
 ![Screenshot_1](https://user-images.githubusercontent.com/87595266/218670694-e53bb1c4-fff2-42e9-9b9e-62b298da7fff.png)
 
