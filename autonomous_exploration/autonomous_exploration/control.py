@@ -255,9 +255,7 @@ def exploration(data,width,height,resolution,column,row,originX,originY):
         data[data > 5] = 1 # 0 olanlar gidilebilir yer, 100 olanlar kesin engel
         data = frontierB(data)
         data,groups = assign_groups(data)
-        print("Grup Sayısı: ",len(groups))
         groups = deleteGroups(groups)
-        print("Grup Sayısı: ",len(groups))
         if len(groups) == 0:
             print("[BILGI] KESIF TAMAMLANDI")
             sys.exit()
