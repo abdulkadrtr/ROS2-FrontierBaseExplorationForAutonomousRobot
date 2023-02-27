@@ -4,7 +4,7 @@ from nav_msgs.msg import OccupancyGrid , Odometry
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 import numpy as np
-import heapq , math , random
+import heapq , math , random , yaml
 import scipy.interpolate as si
 import sys , threading , time
 
