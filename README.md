@@ -11,6 +11,16 @@ This project utilizes the **Frontier-Based Exploration** algorithm for autonomou
 
 https://youtu.be/UxCZAU9ZZoc
 
+# Update Version V1.1 - 26.02.2023
+
+https://youtu.be/_1vtmFuhl9Y
+
+- The exploration algorithm has been optimized.
+
+- Robot decision algorithm has been changed. Watch the video for detailed information.
+
+- Thread structure has been added to the exploration algorithm. 
+
 
 # How does it work?
 
