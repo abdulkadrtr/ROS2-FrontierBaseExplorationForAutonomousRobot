@@ -8,6 +8,16 @@ import heapq , math , random
 import scipy.interpolate as si
 import sys , threading , time
 
+
+with open("src/autonomous_exploration/config/params.yaml", 'r') as file:
+    params = yaml.load(file, Loader=yaml.FullLoader)
+
+lookahead_distance = params["lookahead_distance"]
+speed = params["speed"]
+expansion_size = params["expansion_size"]
+target_error = params["target_error"]
+robot_r = params["robot_r"]
+
 pathGlobal = 0
 
 def euler_from_quaternion(x,y,z,w):
