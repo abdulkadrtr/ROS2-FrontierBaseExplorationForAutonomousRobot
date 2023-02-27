@@ -4,22 +4,11 @@ from nav_msgs.msg import OccupancyGrid , Odometry
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 import numpy as np
-import heapq
-import math
+import heapq , math , random
 import scipy.interpolate as si
-import sys
-import random
-import yaml
+import sys , threading , time
 
-with open("src/autonomous_exploration/config/params.yaml", 'r') as file:
-    params = yaml.load(file, Loader=yaml.FullLoader)
-
-lookahead_distance = params["lookahead_distance"]
-speed = params["speed"]
-expansion_size = params["expansion_size"]
-target_error = params["target_error"]
-robot_r = params["robot_r"]
-
+pathGlobal = 0
 
 def euler_from_quaternion(x,y,z,w):
     t0 = +2.0 * (w * x + y * z)
@@ -192,14 +181,10 @@ def dfs(matrix, i, j, group, groups):
     dfs(matrix, i + 1, j - 1, group, groups) # sol alt çapraz
     return group + 1
 
-def deleteGroups(groups):
+def fGroups(groups):
     sorted_groups = sorted(groups.items(), key=lambda x: len(x[1]), reverse=True)
-    top_five_groups = sorted_groups[:5]
-    if len(sorted_groups) > 5:
-        for group in sorted_groups[5:]:
-            if group not in top_five_groups:
-                del groups[group[0]] 
-    return groups
+    top_five_groups = [g for g in sorted_groups[:5] if len(g[1]) > 2]    
+    return top_five_groups
 
 def calculate_centroid(x_coords, y_coords):
     n = len(x_coords)
@@ -210,20 +195,65 @@ def calculate_centroid(x_coords, y_coords):
     centroid = (int(mean_x), int(mean_y))
     return centroid
 
+#Bu fonksiyon en buyuk 5 gruptan target_error*2 uzaklıktan daha uzak olan ve robota en yakın olanı seçer.
+"""
 def findClosestGroup(matrix,groups, current,resolution,originX,originY):
-    min = 1000
-    target = None
-    for value in groups.items():
-        middle = calculate_centroid([p[0] for p in value[1]],[p[1] for p in value[1]])
+    targetP = None
+    distances = []
+    paths = []
+    min_index = -1
+    for i in range(len(groups)):
+        middle = calculate_centroid([p[0] for p in groups[i][1]],[p[1] for p in groups[i][1]]) 
         path = astar(matrix, current, middle)
         path = [(p[1]*resolution+originX,p[0]*resolution+originY) for p in path]
         total_distance = pathLength(path)
-        if total_distance < min and total_distance > target_error*2:
-            target = middle
-            min = total_distance
-        if target == None:
-            target = value[1][random.randint(0,len(value[1])-1)]
-    return target[0],target[1]
+        distances.append(total_distance)
+        paths.append(path)
+    for i in range(len(distances)):
+        if distances[i] > target_error*3:
+            if min_index == -1 or distances[i] < distances[min_index]:
+                min_index = i
+    if min_index != -1:
+        targetP = paths[min_index]
+    else: #gruplar target_error*2 uzaklıktan daha yakınsa random bir noktayı hedef olarak seçer. Bu robotun bazı durumlardan kurtulmasını sağlar.
+        index = random.randint(0,len(groups)-1)
+        target = groups[index][1]
+        target = target[random.randint(0,len(target)-1)]
+        path = astar(matrix, current, target)
+        targetP = [(p[1]*resolution+originX,p[0]*resolution+originY) for p in path]
+    return targetP
+"""
+def findClosestGroup(matrix,groups, current,resolution,originX,originY):
+    targetP = None
+    distances = []
+    paths = []
+    score = []
+    max_score = -1 #max score index
+    for i in range(len(groups)):
+        middle = calculate_centroid([p[0] for p in groups[i][1]],[p[1] for p in groups[i][1]]) 
+        path = astar(matrix, current, middle)
+        path = [(p[1]*resolution+originX,p[0]*resolution+originY) for p in path]
+        total_distance = pathLength(path)
+        distances.append(total_distance)
+        paths.append(path)
+    for i in range(len(distances)):
+        if distances[i] == 0:
+            score.append(0)
+        else:
+            score.append(len(groups[i][1])/distances[i])
+    for i in range(len(distances)):
+        if distances[i] > target_error*3:
+            if max_score == -1 or score[i] > score[max_score]:
+                max_score = i
+    if max_score != -1:
+        targetP = paths[max_score]
+    else: #gruplar target_error*2 uzaklıktan daha yakınsa random bir noktayı hedef olarak seçer. Bu robotun bazı durumlardan kurtulmasını sağlar.
+        index = random.randint(0,len(groups)-1)
+        target = groups[index][1]
+        target = target[random.randint(0,len(target)-1)]
+        path = astar(matrix, current, target)
+        targetP = [(p[1]*resolution+originX,p[0]*resolution+originY) for p in path]
+    return targetP
 
 def pathLength(path):
     for i in range(len(path)):
@@ -250,22 +280,24 @@ def costmap(data,width,height,resolution):
     return data
 
 def exploration(data,width,height,resolution,column,row,originX,originY):
-        data = costmap(data,width,height,resolution)
+        global pathGlobal #Global degisken
+        data = costmap(data,width,height,resolution) #Engelleri genislet
         data[row][column] = 0 #Robot Anlık Konum
         data[data > 5] = 1 # 0 olanlar gidilebilir yer, 100 olanlar kesin engel
-        data = frontierB(data)
-        data,groups = assign_groups(data)
-        groups = deleteGroups(groups)
-        if len(groups) == 0:
-            print("[BILGI] KESIF TAMAMLANDI")
-            sys.exit()
-        data[data < 0] = 1 #-0.05 olanlar bilinmeyen yer
-        #data icerigi 0: gidilebilir, 1: engel
-        rowH,columnH = findClosestGroup(data,groups,(row,column),resolution,originX,originY)
-        path = astar(data,(row,column),(rowH,columnH))
-        path = [(p[1]*resolution+originX,p[0]*resolution+originY) for p in path]
-        path = bspline_planning(path,len(path)*5)
-        return path
+        data = frontierB(data) #Sınır noktaları bul
+        data,groups = assign_groups(data) #Sınır noktaları gruplandır
+        groups = fGroups(groups) #Grupları küçükten büyüğe sırala. En buyuk 5 grubu al
+        if len(groups) == 0: #Grup yoksa kesif tamamlandı
+            path = -1
+        else: #Grup varsa en yakın grubu bul
+            data[data < 0] = 1 #-0.05 olanlar bilinmeyen yer. Gidilemez olarak isaretle. 0 = gidilebilir, 1 = gidilemez.
+            path = findClosestGroup(data,groups,(row,column),resolution,originX,originY) #En yakın grubu bul
+            if path != None: #Yol varsa BSpline ile düzelt
+                path = bspline_planning(path,len(path)*5)
+            else:
+                path = -1
+        pathGlobal = path
+        return
 
 def localControl(scan):
     v = None
@@ -287,55 +319,76 @@ def localControl(scan):
 class navigationControl(Node):
     def __init__(self):
         super().__init__('Exploration')
-        self.subscription = self.create_subscription(OccupancyGrid,'map',self.listener_callback,10)
-        self.subscription = self.create_subscription(Odometry,'odom',self.info_callback,10)
+        self.subscription = self.create_subscription(OccupancyGrid,'map',self.map_callback,10)
+        self.subscription = self.create_subscription(Odometry,'odom',self.odom_callback,10)
         self.subscription = self.create_subscription(LaserScan,'scan',self.scan_callback,10)
         self.publisher = self.create_publisher(Twist, 'cmd_vel', 10)
-        timer_period = 0.01
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-        self.flag = 1
         print("[BILGI] KESİF MODU AKTİF")
-        print("[BILGI] YENI HEDEF BELİRLENİYOR")
+        self.kesif = True
+        threading.Thread(target=self.exp).start() #Kesif fonksiyonunu thread olarak calistirir.
+        
+    def exp(self):
+        twist = Twist()
+        while True: #Sensor verileri gelene kadar bekle.
+            if not hasattr(self,'map_data') or not hasattr(self,'odom_data') or not hasattr(self,'scan_data'):
+                time.sleep(0.1)
+                continue
+            if self.kesif == True:
+                if isinstance(pathGlobal, int) and pathGlobal == 0:
+                    column = int((self.x - self.originX)/self.resolution)
+                    row = int((self.y- self.originY)/self.resolution)
+                    exploration(self.data,self.width,self.height,self.resolution,column,row,self.originX,self.originY)
+                    self.path = pathGlobal
+                else:
+                    self.path = pathGlobal
+                if isinstance(self.path, int) and self.path == -1:
+                    print("[BILGI] KESİF TAMAMLANDI")
+                    sys.exit()
+                self.c = int((self.path[-1][0] - self.originX)/self.resolution) 
+                self.r = int((self.path[-1][1] - self.originY)/self.resolution) 
+                self.kesif = False
+                self.i = 0
+                print("[BILGI] YENI HEDEF BELİRLENDI")
+                t = pathLength(self.path)/speed
+                t = t - 0.2 #x = v * t formülüne göre hesaplanan sureden 0.2 saniye cikarilir. t sure sonra kesif fonksiyonu calistirilir.
+                self.t = threading.Timer(t,self.target_callback) #Hedefe az bir sure kala kesif fonksiyonunu calistirir.
+                self.t.start()
+            
+            #Rota Takip Blok Baslangic
+            else:
+                v , w = localControl(self.scan)
+                if v == None:
+                    v, w,self.i = pure_pursuit(self.x,self.y,self.yaw,self.path,lookahead_distance,self.i)
+                if(abs(self.x - self.path[-1][0]) < target_error and abs(self.y - self.path[-1][1]) < target_error):
+                    v = 0.0
+                    w = 0.0
+                    self.kesif = 1
+                    print("[BILGI] HEDEFE ULASILDI")
+                    self.t.join() #Thread bitene kadar bekle.
+                twist.linear.x = v
+                twist.angular.z = w
+                self.publisher.publish(twist)
+                time.sleep(0.1)
+            #Rota Takip Blok Bitis
 
+    def target_callback(self):
+        exploration(self.data,self.width,self.height,self.resolution,self.c,self.r,self.originX,self.originY)
+        
     def scan_callback(self,msg):
+        self.scan_data = msg
         self.scan = msg.ranges
 
-    def listener_callback(self,msg):
-        if (self.x in locals()) == False:
-            self.resolution = msg.info.resolution
-            self.originX = msg.info.origin.position.x
-            self.originY = msg.info.origin.position.y
-            self.width = msg.info.width
-            self.height = msg.info.height
-            self.data = msg.data
-            self.column = int((self.x- msg.info.origin.position.x)/msg.info.resolution)
-            self.row = int((self.y- msg.info.origin.position.y)/msg.info.resolution)
+    def map_callback(self,msg):
+        self.map_data = msg
+        self.resolution = self.map_data.info.resolution
+        self.originX = self.map_data.info.origin.position.x
+        self.originY = self.map_data.info.origin.position.y
+        self.width = self.map_data.info.width
+        self.height = self.map_data.info.height
+        self.data = self.map_data.data
 
-        if self.flag == 1:
-            self.path = exploration(self.data,self.width,self.height,self.resolution,self.column,self.row,self.originX,self.originY)
-            print("[BILGI] HEDEFE GIDILIYOR..")
-            self.i = 0
-            self.flag = 2
-
-    def timer_callback(self):
-        if self.flag == 2:
-            twist = Twist()
-            v , w = localControl(self.scan)
-            if v == None:
-                v, w,self.i = pure_pursuit(self.x,self.y,self.yaw,self.path,lookahead_distance,self.i)
-            else:
-                print("[BILGI] ENGEL TESPİT EDİLDİ]")
-            if(abs(self.x - self.path[-1][0]) < target_error and abs(self.y - self.path[-1][1]) < target_error):
-                v = 0.0
-                w = 0.0
-                self.flag = 1
-                print("[BILGI] HEDEFE ULASILDI")
-                print("[BILGI] YENI HEDEF BELİRLENİYOR")
-            twist.linear.x = v
-            twist.angular.z = w
-            self.publisher.publish(twist)
-
-    def info_callback(self,msg):
+    def odom_callback(self,msg):
+        self.odom_data = msg
         self.x = msg.pose.pose.position.x
         self.y = msg.pose.pose.position.y
         self.yaw = euler_from_quaternion(msg.pose.pose.orientation.x,msg.pose.pose.orientation.y,
