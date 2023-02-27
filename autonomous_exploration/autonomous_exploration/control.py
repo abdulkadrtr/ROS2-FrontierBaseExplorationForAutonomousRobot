@@ -120,7 +120,8 @@ def bspline_planning(array, sn):
         path = array
     return path
 
-def pure_pursuit(current_x, current_y, current_heading, path,lookahead_distance,index):
+def pure_pursuit(current_x, current_y, current_heading, path, index):
+    global lookahead_distance
     closest_point = None
     v = speed
     for i in range(index,len(path)):
@@ -368,11 +369,11 @@ class navigationControl(Node):
             else:
                 v , w = localControl(self.scan)
                 if v == None:
-                    v, w,self.i = pure_pursuit(self.x,self.y,self.yaw,self.path,lookahead_distance,self.i)
+                    v, w,self.i = pure_pursuit(self.x,self.y,self.yaw,self.path,self.i)
                 if(abs(self.x - self.path[-1][0]) < target_error and abs(self.y - self.path[-1][1]) < target_error):
                     v = 0.0
                     w = 0.0
-                    self.kesif = 1
+                    self.kesif = True
                     print("[BILGI] HEDEFE ULASILDI")
                     self.t.join() #Thread bitene kadar bekle.
                 twist.linear.x = v
