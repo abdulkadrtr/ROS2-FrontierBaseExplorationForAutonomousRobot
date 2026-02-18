@@ -1,3 +1,5 @@
+import os
+import sys
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid , Odometry
@@ -9,7 +11,14 @@ import scipy.interpolate as si
 import sys , threading , time
 
 
-with open("src/autonomous_exploration/config/params.yaml", 'r') as file:
+# Get the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Construct path to config file (go up one level to autonomous_exploration/, then into config/)
+config_path = os.path.join(script_dir, '..', 'config', 'params.yaml')
+# Normalize the path (resolve '..')
+config_path = os.path.abspath(config_path)
+
+with open(config_path, 'r') as file:
     params = yaml.load(file, Loader=yaml.FullLoader)
 
 lookahead_distance = params["lookahead_distance"]
@@ -341,46 +350,56 @@ class navigationControl(Node):
     def exp(self):
         twist = Twist()
         while True: #Sensor verileri gelene kadar bekle.
-            if not hasattr(self,'map_data') or not hasattr(self,'odom_data') or not hasattr(self,'scan_data'):
-                time.sleep(0.1)
-                continue
-            if self.kesif == True:
-                if isinstance(pathGlobal, int) and pathGlobal == 0:
-                    column = int((self.x - self.originX)/self.resolution)
-                    row = int((self.y- self.originY)/self.resolution)
-                    exploration(self.data,self.width,self.height,self.resolution,column,row,self.originX,self.originY)
-                    self.path = pathGlobal
+            try:
+                if not hasattr(self,'map_data') or not hasattr(self,'odom_data') or not hasattr(self,'scan_data'):
+                    time.sleep(0.1)
+                    continue
+                if self.kesif == True:
+                    if isinstance(pathGlobal, int) and pathGlobal == 0:
+                        column = int((self.x - self.originX)/self.resolution)
+                        row = int((self.y- self.originY)/self.resolution)
+                        exploration(self.data,self.width,self.height,self.resolution,column,row,self.originX,self.originY)
+                        self.path = pathGlobal
+                    else:
+                        self.path = pathGlobal
+                    if isinstance(self.path, int) and self.path == -1:
+                        print("[BILGI] KESİF TAMAMLANDI")
+                        sys.exit()
+                    self.c = int((self.path[-1][0] - self.originX)/self.resolution) 
+                    self.r = int((self.path[-1][1] - self.originY)/self.resolution) 
+                    self.kesif = False
+                    self.i = 0
+                    print("[BILGI] YENI HEDEF BELİRLENDI")
+                    t = pathLength(self.path)/speed
+                    t = t - 0.2 #x = v * t formülüne göre hesaplanan sureden 0.2 saniye cikarilir. t sure sonra kesif fonksiyonu calistirilir.
+                    self.t = threading.Timer(t,self.target_callback) #Hedefe az bir sure kala kesif fonksiyonunu calistirir.
+                    self.t.start()
+                
+                #Rota Takip Blok Baslangic
                 else:
-                    self.path = pathGlobal
-                if isinstance(self.path, int) and self.path == -1:
-                    print("[BILGI] KESİF TAMAMLANDI")
-                    sys.exit()
-                self.c = int((self.path[-1][0] - self.originX)/self.resolution) 
-                self.r = int((self.path[-1][1] - self.originY)/self.resolution) 
-                self.kesif = False
-                self.i = 0
-                print("[BILGI] YENI HEDEF BELİRLENDI")
-                t = pathLength(self.path)/speed
-                t = t - 0.2 #x = v * t formülüne göre hesaplanan sureden 0.2 saniye cikarilir. t sure sonra kesif fonksiyonu calistirilir.
-                self.t = threading.Timer(t,self.target_callback) #Hedefe az bir sure kala kesif fonksiyonunu calistirir.
-                self.t.start()
-            
-            #Rota Takip Blok Baslangic
-            else:
-                v , w = localControl(self.scan)
-                if v == None:
-                    v, w,self.i = pure_pursuit(self.x,self.y,self.yaw,self.path,self.i)
-                if(abs(self.x - self.path[-1][0]) < target_error and abs(self.y - self.path[-1][1]) < target_error):
-                    v = 0.0
-                    w = 0.0
-                    self.kesif = True
-                    print("[BILGI] HEDEFE ULASILDI")
-                    self.t.join() #Thread bitene kadar bekle.
-                twist.linear.x = v
-                twist.angular.z = w
-                self.publisher.publish(twist)
-                time.sleep(0.1)
-            #Rota Takip Blok Bitis
+                    print("DEBUG: Entered else branch")
+                    v , w = localControl(self.scan)
+                    print(f"DEBUG: localControl -> v={v}, w={w}")
+                    if v == None:
+                        print("DEBUG: Calling pure_pursuit")
+                        v, w, self.i = pure_pursuit(self.x, self.y, self.yaw, self.path, self.i)
+                        print(f"DEBUG: pure_pursuit -> v={v}, w={w}, i={self.i}")
+                    if(abs(self.x - self.path[-1][0]) < target_error and abs(self.y - self.path[-1][1]) < target_error):
+                        v = 0.0
+                        w = 0.0
+                        self.kesif = True
+                        print("[BILGI] HEDEFE ULASILDI")
+                        self.t.join() #Thread bitene kadar bekle.
+                    print(f"DEBUG: Publishing v={v}, w={w}")
+                    twist.linear.x = v
+                    twist.angular.z = w
+                    self.publisher.publish(twist)
+                    time.sleep(0.1)
+                #Rota Takip Blok Bitis
+            except Exception as e:
+                print(f"ERROR in exp thread: {e}")
+                import traceback
+                traceback.print_exc()
 
     def target_callback(self):
         exploration(self.data,self.width,self.height,self.resolution,self.c,self.r,self.originX,self.originY)
