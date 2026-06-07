@@ -1,4 +1,10 @@
 # ROS2-FrontierBaseExplorationForAutonomousRobot
+
+**🏆 Real-World Validation & Mentions:**
+* **US R&D Implementation:** Evaluated and integrated by the US Engineering Research and Development Center (ERDC) in their official technical report ([ERDC TR-25-10](https://www.erdc.usace.army.mil/Media/Publication-Notices/Article/4186191/autonomous-robotics-development-in-robot-operating-system-ros-2-humble/)). The package was selected for its efficient Depth-First Search (DFS) algorithm to govern autonomous decision-making, successfully guiding a physical robot to autonomously map indoor environments and generate 3D point clouds.
+* **Academic Research:** Featured as a core implementation in a Master's thesis at Politecnico di Torino (Italy), focusing on collaborative autonomous exploration methodologies ([Read Thesis](https://webthesis.biblio.polito.it/33980/)).
+
+
 Our autonomous ground vehicle uses Frontier Based exploration to navigate and map unknown environments. Equipped with sensors, it can avoid obstacles and make real-time decisions. It has potential applications in search and rescue, agriculture, and logistics, and represents an important step forward in autonomous ground vehicle development.
 
 This project utilizes the **Frontier-Based Exploration** algorithm for autonomous exploration. The project employs **DFS** for grouping boundary points, **A*** for finding the shortest path, **B-Spline** for smoothing path curvature, and **Pure Pursuit** for path following, along with other obstacle avoidance techniques. The combination of these techniques aims to provide a sophisticated, efficient, and reliable solution for autonomous ground vehicle exploration in a wide range of applications.
